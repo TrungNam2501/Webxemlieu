@@ -14,7 +14,7 @@ type RecipeProcessDefinition struct {
 	LimitaryHour datatypes.JSON `json:"LimitaryHour"`
 }
 
-// TableName trả về tên bảng đầy đủ (gồm schema) trong PostgreSQL.
+// TableName trả về tên bảng đầy đủ (gồm schema) trong PostgreSQsss.
 func (RecipeProcessDefinition) TableName() string {
 	return "kvmes.recipe_process_definition"
 }

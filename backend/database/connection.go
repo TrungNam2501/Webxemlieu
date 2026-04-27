@@ -1,19 +1,21 @@
 package database
 
 import (
-	"log"
+	"fmt"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
+// DB là handle GORM dùng chung cho toàn ứng dụng.
 var DB *gorm.DB
 
-func Connect() {
-	dsn := "host=198.1.1.92 user=postgres password=kenda dbname=kverp port=5432 sslmode=disable"
+// Connect mở kết nối tới PostgreSQL bằng DSN cho trước và gán vào biến DB.
+func Connect(dsn string) error {
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		log.Fatal("Không kết nối được DB:", err)
+		return fmt.Errorf("không kết nối được DB: %w", err)
 	}
 	DB = db
+	return nil
 }

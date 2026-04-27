@@ -1,37 +1,62 @@
 package main
 
 import (
-	"strings"
+	"context"
+	"errors"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
+	"Webxemlieu/config"
 	"Webxemlieu/database"
+	"Webxemlieu/middleware"
 	"Webxemlieu/routes"
 
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
-	gin.SetMode(gin.DebugMode)
+	cfg := config.Load()
+
+	gin.SetMode(cfg.GinMode)
 	r := gin.Default()
-	r.SetTrustedProxies(nil)
+	if err := r.SetTrustedProxies(nil); err != nil {
+		log.Printf("warning: SetTrustedProxies: %v", err)
+	}
 
-	database.Connect()
-	routes.SetupRoutes(r)
+	r.Use(middleware.CORS(cfg.CORSAllowedOrigins))
 
-	// Serve static assets
-	r.Static("/app/assets", "../frontend/dist/assets")
-	r.StaticFile("/app/favicon.ico", "../frontend/dist/favicon.ico")
+	if err := database.Connect(cfg.PostgresDSN()); err != nil {
+		log.Fatalf("database: %v", err)
+	}
 
-	r.GET("/app/", func(c *gin.Context) {
-		c.File("../frontend/dist/index.html")
-	})
-	// ...existing code...
-	r.NoRoute(func(c *gin.Context) {
-		if strings.HasPrefix(c.Request.URL.Path, "/app") {
-			c.File("../frontend/dist/index.html")
-		} else {
-			c.JSON(404, gin.H{"message": "Not Found"})
+	routes.SetupAPI(r)
+	routes.SetupSPA(r, cfg.FrontendDist)
+
+	srv := &http.Server{
+		Addr:    ":" + cfg.Port,
+		Handler: r,
+	}
+
+	go func() {
+		log.Printf("server: lắng nghe trên :%s (mode=%s)", cfg.Port, cfg.GinMode)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("server: %v", err)
 		}
-	})
+	}()
 
-	r.Run(":8080")
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("server: shutting down...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("server forced shutdown: %v", err)
+	}
+	log.Println("server: stopped")
 }
